@@ -30,7 +30,7 @@ shap.decision_plot(explainer.expected_value, shap_values_1, X_test.iloc[0])
 p = shap.force_plot(explainer.expected_value, shap_values_1, X_test.iloc[0])
 
 print("python shap execution time: {0}".format(time.time() - start))
-instance = X_train.iloc[0:5].values
+instance = X_test.iloc[0:5].values
 
 start = time.time()
 coalition_depth = len(X.columns)-1

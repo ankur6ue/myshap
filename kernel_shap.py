@@ -80,9 +80,10 @@ class KernelShapModel:
             raise ValueError('input variables must be np.ndarray')
 
     def _shap(self, Ef, fx, data, weights, coalitions, pi, new_data):
-        numnew_datas = new_data.shape[0]
-        shap_vals = []
-        for i in range(0, numnew_datas):
+        num_instances = new_data.shape[0]
+        num_features = new_data.shape[1]
+        shap_vals = np.zeros((num_instances, num_features+1))
+        for i in range(0, num_instances):
             Y = self._f_hxz(data, weights, coalitions, new_data[i])
             F = data.shape[1]
             W = np.diag(pi)
@@ -96,11 +97,10 @@ class KernelShapModel:
             shap_vals_ = np.dot(left, right)
             phi0 = Ef
             phi_n = fx - phi0 - np.sum(shap_vals_)
-            shap_vals.append([])
-            shap_vals[i].append(phi0)
-            for val in shap_vals_:
-                shap_vals[i].append(val)
-            shap_vals[i].append(phi_n)
+            shap_vals[i][0] = phi0
+            for idx, val in enumerate(shap_vals_):
+                shap_vals[i][idx+1] = val
+            shap_vals[i][num_features] = phi_n[0]
 
         return np.array(shap_vals)
 
