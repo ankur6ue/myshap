@@ -30,14 +30,14 @@ shap.decision_plot(explainer.expected_value, shap_values_1, X_test.iloc[0])
 p = shap.force_plot(explainer.expected_value, shap_values_1, X_test.iloc[0])
 
 print("python shap execution time: {0}".format(time.time() - start))
-instance = X_test.iloc[0:5].values
+instance = X_test.iloc[0:50].values
 
 start = time.time()
 coalition_depth = len(X.columns)-1
 num_train_samples = X_train.values.shape[0]
 weights = np.ones(num_train_samples)/num_train_samples
-shap_values_2 = KernelShapModel(model.predict).run(X_train.values, weights, instance, coalition_depth)
-
+shap_values_2 = KernelShapModel(model.predict).run(X_train.values, weights, instance, coalition_depth, use_mp=True)
+print(time.time() - start)
 f = plt.figure()
 f.savefig("/summary_plot1.png", bbox_inches='tight', dpi=600)
 print("python shap execution time: {0}".format(time.time() - start))
