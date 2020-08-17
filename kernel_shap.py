@@ -15,8 +15,7 @@ class KernelShapModel:
         self.predictor = predictor
         self.coalitions = None
 
-    def run(self, data: np.ndarray, weights: np.ndarray, new_data: np.ndarray, coalition_depth:int=1, use_mp:bool=False,
-        max_cpus:int=5)-> np.ndarray:
+    def run(self, data: np.ndarray, weights: np.ndarray, new_data: np.ndarray, coalition_depth:int=1)-> np.ndarray:
         """ Generates KernelSHAP values for data points in data using the Kernel Shap algorithm
 
                 Parameters
@@ -60,23 +59,7 @@ class KernelShapModel:
             fx = self.predictor(new_data)
             Ef = np.average(self.predictor(data), weights=weights)
             pi = self._generate_pi(coalitions)
-            futures = []
-            shap_vals = []
-            if use_mp:
-                num_cores = min(max_cpus, os.cpu_count())
-                instance_chunks = np.array_split(new_data, num_cores, axis=0)
-                fx_chunks = np.array_split(fx, num_cores, axis=0)
-                num_splits = len(instance_chunks)
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    for i in range(0, num_splits):
-                        futures.append(executor.submit(lambda p: self._shap(*p),
-                                        [Ef, fx_chunks[i], data, weights, coalitions, pi, instance_chunks[i]]))
-
-                for future in futures:
-                    for s in future.result():
-                        shap_vals.append(s)
-            else:
-                shap_vals = self._shap(Ef, fx, data, weights, coalitions, pi, new_data)
+            shap_vals = self._shap(Ef, fx, data, weights, coalitions, pi, new_data)
             return shap_vals
         else:
             raise ValueError('input variables must be np.ndarray')
