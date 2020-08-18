@@ -51,7 +51,9 @@ def run_default_shap_impl(model_state, data_to_explain):
     X_train = model_state['X_train']
     explainer = shap.KernelExplainer(model.predict, X_train)
     shap_values = explainer.shap_values(data_to_explain)
-    return shap_values
+    phi0 = explainer.expected_value
+    shap_values_ = np.insert(shap_values, 0, np.ones(shap_values.shape[0]) * phi0, axis=1)
+    return shap_values_
 
 
 @task(name="run_default_shap")
@@ -119,10 +121,8 @@ def get_data_to_explain(model_state, start_index, end_index):
 
 
 def compare_results_impl(default_shap_vals, my_shap_vals):
-    # don't include phi0, because that's not part of the shap_values returned by shap.KernelExplainer
 
-
-    my_shap_vals = np.array(my_shap_vals)[:, 1:]
+    my_shap_vals = np.array(my_shap_vals)
 
     M, N = my_shap_vals.shape
     max_diff = 0
@@ -146,8 +146,9 @@ def compare_results(default_shap, my_shap):
 def test(client):
     df = etl_impl('winequality-red.csv')
     model_state = create_model_impl(df)
-    data_to_explain = get_data_to_explain_impl(model_state, 0, 5)
+    data_to_explain = get_data_to_explain_impl(model_state, 0, 50)
     my_shap_distributed = run_distributed_shap_impl(model_state, data_to_explain)
+
     default_shap = run_default_shap_impl(model_state, data_to_explain)
     match = compare_results_impl(default_shap, my_shap_distributed)
     if match is True:

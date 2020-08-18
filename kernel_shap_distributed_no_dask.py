@@ -76,7 +76,7 @@ class KernelShapModelDistributed_NoDask(KernelShapModel):
                     for s in future.result():
                         shap_vals.append(s)
 
-            return shap_vals
+            return np.array(shap_vals)
         else:
             raise ValueError('input variables must be np.ndarray')
 

@@ -81,11 +81,11 @@ class KernelShapModel:
             right = np.dot(np.dot(MM.transpose(), W), Y)
             shap_vals_ = np.dot(left, right)
             phi0 = Ef
-            phi_n = fx - phi0 - np.sum(shap_vals_)
+            phi_n = fx[i] - phi0 - np.sum(shap_vals_)
             shap_vals[i][0] = phi0
             for idx, val in enumerate(shap_vals_):
                 shap_vals[i][idx+1] = val
-            shap_vals[i][num_features] = phi_n[0]
+            shap_vals[i][num_features] = phi_n
 
         return np.array(shap_vals)
 
