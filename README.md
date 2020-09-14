@@ -9,7 +9,7 @@ I also provide a distributed implementation that uses Python multiprocessing lib
 I use the Prefect workflow orchestration system running over a local DASK cluster to run the ETL task, my serial KernelSHAP implementation, my distributed KernelSHAP implementation, the default Python Shap library implementation and a results comparison tasks. The three KernelSHAP variants are executed in parallel, as shown in the table below.
 
 
-Total flow exeuction time (sec) | Distributed implementation | Serial implementation | Default Python implementation 
+Total flow execution time (sec) | Distributed implementation | Serial implementation | Default Python implementation 
 --- | --- | --- | ---
 47.8 | 6.9 | 31.4 | 41.8
 
