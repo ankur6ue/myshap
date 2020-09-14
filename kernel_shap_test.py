@@ -16,7 +16,7 @@ import prefect
 from prefect.engine.executors import DaskExecutor
 
 #shap.initjs()
-
+# the _impl versions can be called directly, while the ones without can only be called by Prefect
 def etl_impl(name):
     df = pd.read_csv(name)  # Load the data
     return df
@@ -96,7 +96,7 @@ def run_distributed_shap_impl(model_state, data_to_explain):
     weights = np.ones(num_train_samples) / num_train_samples
     kernelShapModel = KernelShapModelDistributed_NoDask(model.predict)
     shap_values = kernelShapModel.run(X_train.values, weights, data_to_explain.values,
-                                      coalition_depth,  use_mp=True, num_cpus=5)
+                                      coalition_depth, num_cpus=5)
     return shap_values
 
 
@@ -146,7 +146,7 @@ def compare_results(default_shap, my_shap):
 def test(client):
     df = etl_impl('winequality-red.csv')
     model_state = create_model_impl(df)
-    data_to_explain = get_data_to_explain_impl(model_state, 0, 50)
+    data_to_explain = get_data_to_explain_impl(model_state, 0, 5)
     my_shap_distributed = run_distributed_shap_impl(model_state, data_to_explain)
 
     default_shap = run_default_shap_impl(model_state, data_to_explain)
@@ -163,16 +163,23 @@ if __name__ == '__main__':
     client = Client(threads_per_worker=10, n_workers=1)
     cluster = client.cluster
     serv_address = cluster.scheduler.address
-    test(client)
+    # test(client)
 
     with Flow("shap pipeline") as flow:
         name = Parameter('name')
+        # load data from CSV and get a dataframe
         df = etl(name)
+        # Train randomforest model
         model_state = create_model(df)
-        data_to_explain = get_data_to_explain(model_state, 0, 1)
+        # get data to explain: returns test dataframe rows from start to end index
+        data_to_explain = get_data_to_explain(model_state, 0, 5)
+        # Run my serial (non-distributed) implementation of shap
         my_shap = run_my_shap(model_state, data_to_explain)
+        # Run the distributed version
         my_shap_distributed = run_distributed_shap(model_state, data_to_explain)
+        # Run the default shap python library implementation
         default_shap = run_default_shap(model_state, data_to_explain)
+        # compare results of the distributed version with the default python implementation
         match = compare_results(default_shap, my_shap_distributed)
 
     # flow.visualize()
