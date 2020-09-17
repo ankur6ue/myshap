@@ -163,7 +163,7 @@ if __name__ == '__main__':
     client = Client(threads_per_worker=10, n_workers=1)
     cluster = client.cluster
     serv_address = cluster.scheduler.address
-    # test(client)
+    test(client)
 
     with Flow("shap pipeline") as flow:
         name = Parameter('name')
