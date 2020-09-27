@@ -83,6 +83,17 @@ class KernelShapModel:
         else:
             raise ValueError('input variables must be np.ndarray')
 
+    def find_varying_indices(self):
+        num_features = len(logreg_train_features.columns)
+        varying = np.zeros(num_features)
+
+        for i in range(num_features):
+            varying[i] = False
+            feature = test_data.values[0, i]
+            num_mismatches = np.sum(np.invert(np.isclose(feature, background_means[:, i], equal_nan=True)))
+            varying[i] = num_mismatches > 0
+        varying_indices = np.nonzero(varying)[0]
+
     def _shap(self, Ef, fx, data, weights, coalitions, pi, new_data):
         num_instances = new_data.shape[0]
         num_features = new_data.shape[1]
@@ -132,7 +143,7 @@ class KernelShapModel:
             weights.append(coalition_weight(self.num_features, z))
         return weights
 
-    def kmeans(self, X, k, round_values=True):
+    def kmeans(self, x: np.ndarray, k: int, round_values=True):
         """ Summarize a dataset with k mean samples weighted by the number of data points they
         each represent.
 
@@ -153,13 +164,13 @@ class KernelShapModel:
         Cluster centers, cluster weights.
         """
 
-        kmeans = KMeans(n_clusters=k, random_state=0).fit(X)
+        kmeans = KMeans(n_clusters=k, random_state=0).fit(x)
 
         if round_values:
             for i in range(k):  # for each cluster
-                for j in range(X.shape[1]):  # find closest data point whose feature j is closest to cluster i
-                    ind = np.argmin(np.abs(X[:, j] - kmeans.cluster_centers_[i, j]))
-                    kmeans.cluster_centers_[i, j] = X[ind, j]  # set the j'th feature of cluster i to the closest
+                for j in range(x.shape[1]):  # find closest data point whose feature j is closest to cluster i
+                    ind = np.argmin(np.abs(x[:, j] - kmeans.cluster_centers_[i, j]))
+                    kmeans.cluster_centers_[i, j] = x[ind, j]  # set the j'th feature of cluster i to the closest
                     # matching data point
         # The weights of a cluster are proportional to the number of elements in the cluster
         weights = 1.0 * np.bincount(kmeans.labels_)

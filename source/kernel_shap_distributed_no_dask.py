@@ -10,7 +10,7 @@ class KernelShapModelDistributed_NoDask(KernelShapModel):
         super().__init__(predictor)
 
     def run(self, data: np.ndarray, weights: np.ndarray, new_data: np.ndarray, coalition_depth: int = 1,
-            num_cpus: int = 1) -> np.ndarray:
+            num_workers: int = 1) -> np.ndarray:
         """
         Generates KernelSHAP values for data points in data using the KernelShap algorithm.
         This version of KernelShap distributes out the shapley value calculation over N cpus.
@@ -61,7 +61,7 @@ class KernelShapModelDistributed_NoDask(KernelShapModel):
 
             # sample code to parallelize using concurrent.futures
             futures = []
-            num_cores = min(num_cpus, os.cpu_count())
+            num_cores = min(num_workers, os.cpu_count())
             instance_chunks = np.array_split(new_data, num_cores, axis=0)
             fx_chunks = np.array_split(fx, num_cores, axis=0)
             num_splits = len(instance_chunks)

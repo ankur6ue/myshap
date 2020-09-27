@@ -5,7 +5,9 @@ from sklearn.cluster import KMeans
 import concurrent.futures
 import os
 import types
-from dask.distributed import Client, as_completed
+from dask.distributed import worker_client
+import dask
+import prefect
 from kernel_shap import KernelShapModel, generate_coalitions
 
 
@@ -14,7 +16,7 @@ class KernelShapModelDistributed(KernelShapModel):
         super().__init__(predictor)
 
     def run(self, data: np.ndarray, weights: np.ndarray, new_data:np.ndarray, coalition_depth:int=1,
-            client:Client=None, use_mp:bool=False, num_cpus:int=1)-> np.ndarray:
+             num_workers:int=1)-> np.ndarray:
         """
         Generates KernelSHAP values for data points in data using the KernelShap algorithm.
         This version of KernelShap distributes out the shapley value calculation over N cpus.
@@ -61,7 +63,7 @@ class KernelShapModelDistributed(KernelShapModel):
             pi = self._generate_pi(coalitions)
             futures = []
             shap_vals = []
-            num_workers = num_cpus
+
             # new_data_dask = da.from_array(new_data)
             # new_data_dask = new_data_dask.rechunk({0: 5, 1: None})
             # fx_dask = da.from_array(fx)
@@ -69,38 +71,20 @@ class KernelShapModelDistributed(KernelShapModel):
             instance_chunks = np.array_split(new_data, num_workers, axis=0)
             fx_chunks = np.array_split(fx, num_workers, axis=0)
             num_splits = len(instance_chunks)
-
             # scatter common data across workers in advance
-            Ef_, data_, weights_, coalitions_, pi_ = client.scatter([Ef, data, weights, coalitions, pi], broadcast=True)
-            for i in range(0, num_splits):
-                print("Submitting:", i)
-                future = client.submit(self._shap,
-                                       Ef_, fx_chunks[i], data_, weights_, coalitions_, pi_, instance_chunks[i])
-                futures.append(future)
+            # Ef_, data_, weights_, coalitions_, pi_ = client.scatter([Ef, data, weights, coalitions, pi], broadcast=True)
+            with worker_client() as client:
+                for i in range(0, num_splits):
+                    print("Submitting:", i)
+                    future = client.submit(self._shap,
+                                           Ef, fx_chunks[i], data, weights, coalitions, pi, instance_chunks[i])
+                    futures.append(future)
 
-            # for future in as_completed(futures): This is sometimes more efficient but may result in out-of-order
-            # computation of shap values, and hence requires implementation of re-ordering logic so the shap values
-            # line up with the order of data instances.
-            for future in futures:
-                result = future.result()
-                for s in future.result():
-                    shap_vals.append(s)
-
-
-            if use_mp:  # sample code to parallelize using concurrent.futures
-                max_cpus = 5
-                futures = []
-                num_cores = min(max_cpus, os.cpu_count())
-                instance_chunks = np.array_split(new_data, num_cores, axis=0)
-                fx_chunks = np.array_split(fx, num_cores, axis=0)
-                num_splits = len(instance_chunks)
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    for i in range(0, num_splits):
-                        futures.append(executor.submit(lambda p: self._shap(*p),
-                                                       [Ef, fx_chunks[i], data, weights, coalitions, pi,
-                                                        instance_chunks[i]]))
-
+                # for future in as_completed(futures): This is sometimes more efficient but may result in out-of-order
+                # computation of shap values, and hence requires implementation of re-ordering logic so the shap values
+                # line up with the order of data instances.
                 for future in futures:
+                    result = future.result()
                     for s in future.result():
                         shap_vals.append(s)
 

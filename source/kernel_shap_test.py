@@ -5,14 +5,16 @@ import shap
 from kernel_shap import KernelShapModel
 from kernel_shap_distributed import KernelShapModelDistributed
 from kernel_shap_distributed_no_dask import KernelShapModelDistributed_NoDask
+from kernel_shap_distributed_ray import KernelShapModelDistributedRay
 import time
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
 from sklearn.ensemble import RandomForestRegressor
 import matplotlib.pyplot as plt
-from dask.distributed import Client, progress
+from dask.distributed import Client, progress, LocalCluster
 from prefect import task, Flow, Parameter
 import prefect
+import cloudpickle
 from prefect.engine.executors import DaskExecutor
 
 #shap.initjs()
@@ -88,15 +90,21 @@ def run_my_shap(model_state, data_to_explain):
     return {'shap_values': shap_values, 'exec_time': end - start}
 
 
-def run_distributed_shap_impl(model_state, data_to_explain):
+def run_distributed_shap_impl(model_state, data_to_explain, use_dask=True):
     model = model_state['model']
     X_train = model_state['X_train']
     coalition_depth = len(X_train.columns) - 1
     num_train_samples = X_train.values.shape[0]
     weights = np.ones(num_train_samples) / num_train_samples
-    kernelShapModel = KernelShapModelDistributed_NoDask(model.predict)
-    shap_values = kernelShapModel.run(X_train.values, weights, data_to_explain.values,
-                                      coalition_depth, num_cpus=5)
+    if use_dask:
+        print('using DASK cluster')
+        kernelShapModel = KernelShapModelDistributed(model.predict)
+        shap_values = kernelShapModel.run(X_train.values, weights, data_to_explain.values,
+                                          coalition_depth, num_workers=12)
+    else:
+        kernelShapModel = KernelShapModelDistributed_NoDask(model.predict)
+        shap_values = kernelShapModel.run(X_train.values, weights, data_to_explain.values,
+                                          coalition_depth, num_workers=12)
     return shap_values
 
 
@@ -143,10 +151,10 @@ def compare_results(default_shap, my_shap):
 ## verify shap_values_1 == shap_values_2
 
 
-def test(client):
+def test():
     df = etl_impl('winequality-red.csv')
     model_state = create_model_impl(df)
-    data_to_explain = get_data_to_explain_impl(model_state, 0, 5)
+    data_to_explain = get_data_to_explain_impl(model_state, 0, 240)
     my_shap_distributed = run_distributed_shap_impl(model_state, data_to_explain)
 
     default_shap = run_default_shap_impl(model_state, data_to_explain)
@@ -160,10 +168,9 @@ def test(client):
 
 distributed = True
 if __name__ == '__main__':
-    client = Client(threads_per_worker=10, n_workers=1)
-    cluster = client.cluster
+    cluster = LocalCluster(n_workers=5)
     serv_address = cluster.scheduler.address
-    test(client)
+    # test()
 
     with Flow("shap pipeline") as flow:
         name = Parameter('name')
@@ -177,6 +184,7 @@ if __name__ == '__main__':
         my_shap = run_my_shap(model_state, data_to_explain)
         # Run the distributed version
         my_shap_distributed = run_distributed_shap(model_state, data_to_explain)
+        # my_shap_distributed = run_distributed_shap(model_state, data_to_explain)
         # Run the default shap python library implementation
         default_shap = run_default_shap(model_state, data_to_explain)
         # compare results of the distributed version with the default python implementation
@@ -184,6 +192,7 @@ if __name__ == '__main__':
 
     # flow.visualize()
     executor = DaskExecutor(address=serv_address)
+    # executor.start()
     start = time.time()
     state = flow.run(executor=executor, name='winequality-red.csv')
     end = time.time()
