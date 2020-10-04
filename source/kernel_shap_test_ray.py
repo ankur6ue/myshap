@@ -5,6 +5,7 @@ import shap
 from kernel_shap import KernelShapModel
 from kernel_shap_distributed_no_dask import KernelShapModelDistributed_NoDask
 from kernel_shap_distributed_ray import KernelShapModelDistributedRay
+from connectors.s3 import read_from_s3, set_session_creds
 import time
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
@@ -13,20 +14,23 @@ import matplotlib.pyplot as plt
 import os
 import ray
 import logging
-
+import boto3
 
 logger = logging.getLogger(__name__)
 
 #shap.initjs()
-# the _impl versions can be called directly, while the ones without can only be called by Prefect
-def etl_impl(name):
-    df = pd.read_csv(name)  # Load the data
+# the _impl versions can be called directly
+def etl_impl(name, bucket):
+    if bucket is None: # read local csv file
+        df = pd.read_csv(name)  # Load the data
+    else:
+        df = read_from_s3(bucket, name)
     return df
 
 
 @ray.remote
-def etl(name):
-    return etl_impl(name)
+def etl(name, bucket=None):
+    return etl_impl(name, bucket)
 
 
 def create_model_impl(df):
@@ -177,6 +181,7 @@ def compare_results(default_shap, my_shap):
 def test():
     curr_dir = os.path.dirname(os.path.realpath(__file__))
     df = etl_impl(curr_dir + '/../winequality-red.csv')
+    # etl_impl('winequality-red.csv', 'shap-data')
     model_state = create_model_impl(df)
     data_to_explain = get_data_to_explain_impl(model_state, 0, 240)
     my_shap_distributed = run_distributed_shap_impl(model_state, data_to_explain)
@@ -189,24 +194,41 @@ def test():
         print("Results don't match!")
     print('done')
 
-
+# In this mode, the driver program (this file) will use an existing ray cluster
 distributed = True
-local = False
+# In this mode, a new local (on your master node) ray cluster will be created
+local = True
+# This will run Ray in a single process, useful for debugging (breakpoints will work)
+use_local_mode = False
+
 if __name__ == '__main__':
+    # When running locally, i.e., not connecting to a existing cluster, we get the STS credentials here, because they'll
+    # not be read from file
+    if local:
+        set_session_creds()
     # test()
     curr_dir = os.path.dirname(os.path.realpath(__file__))
     if local:
-        ray.init(local_mode=True)
+        if use_local_mode:
+            ray.init(local_mode=True)
+        else:
+            # Will 6 CPUs
+            ray.init(num_cpus=6)
     else:
         try:
             ray.init(address='auto', _redis_password="password", log_to_driver=True, logging_level=logging.DEBUG)
+            # ray.init()
         except:
             # in older version of ray, redis_password doesn't have the leading underscore
             ray.init(address='auto', redis_password="password", log_to_driver=True, logging_level=logging.DEBUG)
 
-    # load data from CSV and get a dataframe
+    # load data from CSV and get a dataframe. If file is read from disk, full path is provided and second argument is
+    # left empty
     df = etl.remote(curr_dir + '/../winequality-red.csv')
-    # Train randomforest model
+    # if loading data from s3 bucket, second argument is the S3 bucket and csv filename is used as the object key
+    # df = etl.remote('winequality-red.csv', 'shap-data')
+
+     # Train randomforest model
     model_state = create_model.remote(df)
     # get data to explain: returns test dataframe rows from start to end index
     data_to_explain = get_data_to_explain.remote(model_state, 0, 10)
@@ -220,7 +242,9 @@ if __name__ == '__main__':
     match = compare_results.remote(default_shap, my_shap_distributed)
 
     start = time.time()
+    print("Starting DAG execution")
     res = ray.get(match)
+    print("Finished DAG execution")
     end = time.time()
     if res is True:
         print("Results match!")

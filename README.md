@@ -22,13 +22,4 @@ Here's how the Prefect flow looks like:
 ![](images/prefect_flow.png)
 
 ## Distributed implementation using ray
-I recently learnt about [Ray](https://docs.ray.io/en/master/ray-overview/index.html), another system for building distributed applications. I was able to set up a distributed cluster consisting of my main computer and a second Ubuntu laptop and run a test script (source/kernel_shap_test_ray.py) on this cluster. 
-
-You can set up the cluster by setting up an identical conda environment on the master and worker nodes and launching ray on each. See setup_conda.sh for details about this approach. Alternatively, you can create a docker container image containing ray and shap code and launch this container on the master and worker nodes. See setup_docker.sh for details about this approach. 
-
-### Instructions 
-1. Run ray_source/build_ray_docker_images.sh. This script will clone ray and build the rayproject/ray and other docker images
-2. Run `docker build -t ray/myshap .` from the project root directory to build the myshap container image
-3. Create a workers.txt with the IP address(es) of your worker node. If you just want to set up a single node ray cluster, you can leave the file blank
-4. Run setup_conda.sh for the conda environment approach (easier) or setup_docker.sh for the docker approach (trickier).
-5. Once the cluster is running, activate the conda environment and run python source/kernel_shap_test_ray.py in the environment. Note that your application code and ray processes running on the master and worker nodes much use identical conda environment. For the docker approach, use `docker exec` to run kernel_shap_test_ray.py in the docker container running on the master node 
+I recently learnt about [Ray](https://docs.ray.io/en/master/ray-overview/index.html), another system for building distributed applications. To use Ray, run `kernel_shap_distributed_ray.py`. This will initialize a Ray cluster on your computer (with 6 workers) and run the DAG shown above on this cluster. 
