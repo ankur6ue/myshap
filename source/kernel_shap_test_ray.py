@@ -1,20 +1,16 @@
-import math
 import pandas as pd
 import numpy as np
 import shap
 from kernel_shap import KernelShapModel
-from kernel_shap_distributed_no_dask import KernelShapModelDistributed_NoDask
 from kernel_shap_distributed_ray import KernelShapModelDistributedRay
 from connectors.s3 import read_from_s3, set_session_creds
 import time
 from sklearn.model_selection import train_test_split
-from sklearn import preprocessing
 from sklearn.ensemble import RandomForestRegressor
-import matplotlib.pyplot as plt
 import os
 import ray
 import logging
-import boto3
+import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -175,9 +171,6 @@ def compare_results(default_shap, my_shap):
     return compare_results_impl(default_shap_vals, my_shap_vals)
 
 
-## verify shap_values_1 == shap_values_2
-
-
 def test():
     curr_dir = os.path.dirname(os.path.realpath(__file__))
     df = etl_impl(curr_dir + '/../winequality-red.csv')
@@ -194,27 +187,44 @@ def test():
         print("Results don't match!")
     print('done')
 
-# In this mode, a new local (on your master node) ray cluster will be created. If False, the driver program
-# (this file) will use an existing ray cluster
-local = True
-# This will run Ray in a single process, useful for debugging (breakpoints will work)
-use_local_mode = False
 
 if __name__ == '__main__':
-    # When running locally, i.e., not connecting to a existing cluster, we get the STS credentials here, because they'll
-    # not be read from file
-    if local:
-        if os.path.isfile('../iamroles.txt'):
-            with open("../iamroles.txt", "r") as file:
-                role = file.readline()
-                set_session_creds(role)
+    parser = argparse.ArgumentParser(prog='kernel_shap_test_ray', usage='%(prog)s [options]')
+    parser.add_argument('--local', type=bool, default=True, help='if True, Ray creates a new cluster, otherwise '
+                                                                   'Ray attempts to connect to an existing cluster')
+
+    parser.add_argument('--use_local_mode', type=bool, default=False, help='if True, Ray is run in local mode. '
+                                                                             'Doing so forces Ray to use a single '
+                                                                             'process, making it easier to debug')
+    parser.add_argument('--use_s3', type=bool, default=False,
+                        help='if True, local copy of winequality-red.csv is used. Otherwise, copy stored in '
+                             'shap-data S3 bucket is used. You must have a iamroles.txt file in your '
+                             'root directory specifying the IAM role to be assumed to access the S3 bucket')
+
+    parser.add_argument('--num_rows', type=int, default=10,
+                        help='Number of rows of the input data for which SHAP values are calculated. Larger '
+                             'this number, longer the computation time')
+
+    args = parser.parse_args()
+
     # test()
     curr_dir = os.path.dirname(os.path.realpath(__file__))
-    if local:
-        if use_local_mode:
+
+    # When running locally, i.e., not connecting to a existing cluster, we get the STS credentials here, because they'll
+    # not be provided in the environment variables during docker run.
+    if args.local and args.use_s3:
+        file_loc = os.path.join(curr_dir, '../iamroles.txt')
+        if os.path.isfile(file_loc):
+            with open(file_loc, "r") as file:
+                role = file.readline()
+                print('Creating temporary credentials using IAM role {0}'.format(role))
+                set_session_creds(role)
+
+    if args.local:
+        if args.use_local_mode:
             ray.init(local_mode=True)
         else:
-            # Will 6 CPUs
+            # Will use 6 CPUs
             ray.init(num_cpus=6)
     else:
         try:
@@ -224,16 +234,20 @@ if __name__ == '__main__':
             # in older version of ray, redis_password doesn't have the leading underscore
             ray.init(address='auto', redis_password="password", log_to_driver=True, logging_level=logging.DEBUG)
 
-    # load data from CSV and get a dataframe. If file is read from disk, full path is provided and second argument is
-    # left empty
-    # df = etl.remote(curr_dir + '/../winequality-red.csv')
-    # if loading data from s3 bucket, second argument is the S3 bucket and csv filename is used as the object key
-    df = etl.remote('winequality-red.csv', 'shap-data')
+    if args.use_s3:
+        # if loading data from s3 bucket, second argument is the S3 bucket and csv filename is used as the object key
+        df = etl.remote('winequality-red.csv', 'shap-data')
+    else:
+        # load data from CSV and get a dataframe. If file is read from disk, full path is provided and second argument is
+        # left empty
+        print('reading {0} from local file'.format('winequality-red.csv'))
+        df = etl.remote(curr_dir + '/../winequality-red.csv')
+
 
      # Train randomforest model
     model_state = create_model.remote(df)
     # get data to explain: returns test dataframe rows from start to end index
-    data_to_explain = get_data_to_explain.remote(model_state, 0, 10)
+    data_to_explain = get_data_to_explain.remote(model_state, 0, args.num_rows)
     # Run my serial (non-distributed) implementation of shap
     my_shap = run_my_shap.remote(model_state, data_to_explain)
     # Run the distributed version

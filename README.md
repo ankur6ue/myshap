@@ -22,4 +22,4 @@ Here's how the Prefect flow looks like:
 ![](images/prefect_flow.png)
 
 ## Distributed implementation using ray
-I recently learnt about [Ray](https://docs.ray.io/en/master/ray-overview/index.html), another system for building distributed applications. To use Ray, run `kernel_shap_distributed_ray.py`. This will initialize a Ray cluster on your computer (with 6 workers) and run the DAG shown above on this cluster. 
+I recently learnt about [Ray](https://docs.ray.io/en/master/ray-overview/index.html), another system for building distributed applications. To use Ray, run `kernel_shap_distributed_ray.py `. This will initialize a Ray cluster on your computer (with 6 workers) and run the DAG shown above on this cluster. 

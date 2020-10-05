@@ -18,12 +18,15 @@ def set_session_creds(role):
     # Call the assume_role method of the STSConnection object and pass the role
     # ARN and a role session name.
 
+    aws_secret = os.environ['AWS_SECRET_ACCESS_KEY']
+    aws_id = os.environ['AWS_ACCESS_KEY_ID']
+    print('aws_id: {0}'.format(aws_id) )
+    print('aws_secret: {0}'.format(aws_secret))
     assumed_role_object = sts_client.assume_role(
         RoleArn=role,
         RoleSessionName="S3AccessAssumeRoleSession"
     )
-    aws_secret = os.environ['AWS_SECRET_ACCESS_KEY']
-    aws_id = os.environ['AWS_ACCESS_KEY_ID']
+
 
     # From the response that contains the assumed role, get the temporary
     # credentials that can be used to make subsequent API calls
