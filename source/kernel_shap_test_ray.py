@@ -226,9 +226,9 @@ if __name__ == '__main__':
 
     # load data from CSV and get a dataframe. If file is read from disk, full path is provided and second argument is
     # left empty
-    # df = etl.remote(curr_dir + '/../winequality-red.csv')
+    df = etl.remote(curr_dir + '/../winequality-red.csv')
     # if loading data from s3 bucket, second argument is the S3 bucket and csv filename is used as the object key
-    df = etl.remote('winequality-red.csv', 'shap-data')
+    # df = etl.remote('winequality-red.csv', 'shap-data')
 
      # Train randomforest model
     model_state = create_model.remote(df)
