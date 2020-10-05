@@ -87,8 +87,8 @@ ROOT_DIR=~/dev/apps/ML/Interpretability/myshap
 # Create an env.list file containing the temporary AWS credentials
 # This syntax allows to call a function (get_session_creds) declared in another shell file
 . ./get_session_creds.sh
-echo "Reading iamroles.txt"
-creds=$(get_session_creds)
+# echo "Reading iamroles.txt"
+# creds=$(get_session_creds)
 
 # step 1: copy data from head to worker node
 . ./copy_data.sh
