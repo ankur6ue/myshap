@@ -1,4 +1,6 @@
-ray_source/ray/*
+ray_source/ray
+dask-worker-space
 ray_source
 workers.txt
 env.list
+iamroles.txt

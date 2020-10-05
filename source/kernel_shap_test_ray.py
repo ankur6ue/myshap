@@ -194,9 +194,8 @@ def test():
         print("Results don't match!")
     print('done')
 
-# In this mode, the driver program (this file) will use an existing ray cluster
-distributed = True
-# In this mode, a new local (on your master node) ray cluster will be created
+# In this mode, a new local (on your master node) ray cluster will be created. If False, the driver program
+# (this file) will use an existing ray cluster
 local = True
 # This will run Ray in a single process, useful for debugging (breakpoints will work)
 use_local_mode = False
@@ -205,7 +204,10 @@ if __name__ == '__main__':
     # When running locally, i.e., not connecting to a existing cluster, we get the STS credentials here, because they'll
     # not be read from file
     if local:
-        set_session_creds()
+        if os.path.isfile('../iamroles.txt'):
+            with open("../iamroles.txt", "r") as file:
+                role = file.readline()
+                set_session_creds(role)
     # test()
     curr_dir = os.path.dirname(os.path.realpath(__file__))
     if local:
@@ -224,9 +226,9 @@ if __name__ == '__main__':
 
     # load data from CSV and get a dataframe. If file is read from disk, full path is provided and second argument is
     # left empty
-    df = etl.remote(curr_dir + '/../winequality-red.csv')
+    # df = etl.remote(curr_dir + '/../winequality-red.csv')
     # if loading data from s3 bucket, second argument is the S3 bucket and csv filename is used as the object key
-    # df = etl.remote('winequality-red.csv', 'shap-data')
+    df = etl.remote('winequality-red.csv', 'shap-data')
 
      # Train randomforest model
     model_state = create_model.remote(df)

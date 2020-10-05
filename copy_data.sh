@@ -14,8 +14,6 @@ copy_data(){
       rsync -e "ssh -i $SSH_KEY_LOCATION" -a --relative ./ray_source/build_ray_docker_images.sh ankur@$worker_ip:$ROOT_DIR
       # Copy dockerignore so we are not sending unnecessary data to the docker daemon
       scp -i $SSH_KEY_LOCATION -r ./.dockerignore ankur@$worker_ip:$ROOT_DIR/
-      # Conda environment file, not important when using docker images
-      scp -i $SSH_KEY_LOCATION ./envs/environment.yml ankur@$worker_ip:$ROOT_DIR/envs/environment.yml
       # csv file containing our data. Not necessary if file is being read from AWS S3
       scp -i $SSH_KEY_LOCATION ./winequality-red.csv ankur@$worker_ip:$ROOT_DIR/winequality-red.csv
       # Requirements.txt

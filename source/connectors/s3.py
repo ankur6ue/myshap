@@ -12,14 +12,14 @@ import logging
 # get your credentials from environment variables
 
 
-def set_session_creds():
+def set_session_creds(role):
     sts_client = boto3.client('sts')
 
     # Call the assume_role method of the STSConnection object and pass the role
     # ARN and a role session name.
 
     assumed_role_object = sts_client.assume_role(
-        RoleArn="arn:aws:iam::549836289368:role/shap-data-access-role",
+        RoleArn=role,
         RoleSessionName="S3AccessAssumeRoleSession"
     )
     aws_secret = os.environ['AWS_SECRET_ACCESS_KEY']
@@ -73,6 +73,7 @@ def read_from_s3(bucket_name, object_key):
     # credentials to access your S3 buckets.
     # for bucket in s3_resource.buckets.all():
     #    print(bucket.name)
+    print('reading {0} from S3'.format(object_key))
     obj = s3_client.get_object(Bucket=bucket_name, Key=object_key)
     df = pd.read_csv(io.BytesIO(obj['Body'].read()))
     return df
