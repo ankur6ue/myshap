@@ -20,13 +20,13 @@ update_master_node() {
   # --rm removes the container when it is stopped
   # --network=host lets workers connect to ray master using the master machine's IP
   # /bin/bash lets the container running so we can run exec commands
-  docker run -itd --rm --name=$CONTAINER_NAME --shm-size=2G -v $ROOT_DIR/source:/app/source --network=host --env-file ./env.list $IMAGE_NAME /bin/bash
+  docker run -itd --rm --name=$CONTAINER_NAME --cpus=0.000 --shm-size=12G -v $ROOT_DIR/source:/app/source \
+  --network=host --env-file ./env.list $IMAGE_NAME /bin/bash
   # -f option forcibly stops ray processes
   ray stop -f
   docker exec $CONTAINER_NAME \
     ray start --head --num-cpus=$NUM_CPUS --redis-password="password" --port=$PORT
 }
-
 
 update_worker_node() {
   # Worker node
@@ -47,9 +47,11 @@ update_worker_node() {
   # done in this sequence for this to work..
   # -itd runs the container in interactive mode in the background
   # --rm removes the container when it is stopped
+  # --cpus=0.000 means no limit on number of cpus the container can use
   # --network=host lets workers connect to ray master using the master machine's IP
   # /bin/bash lets the container run so we can run exec commands later
-  docker run -itd --rm --name=$CONTAINER_NAME --shm-size=2G -v $ROOT_DIR/source:/app/source --network=host --env-file ./env.list $IMAGE_NAME /bin/bash
+  docker run -itd --rm --name=$CONTAINER_NAME --cpus=0.000 --shm-size=12G -v $ROOT_DIR/source:/app/source \
+  --network=host --env-file ./env.list $IMAGE_NAME /bin/bash
    # -f option forcibly stops any ray processes running on the master node
   ray stop -f
   docker exec $CONTAINER_NAME \
@@ -66,9 +68,9 @@ update_worker_node() {
 # # Get IP address of master node
 master_node_address="$(hostname --ip-address)"
 # Number of CPUs to use on the master node
-NUM_CPUS=3
+NUM_CPUS=8
 # Number of CPUs to use on the worker node
-NUM_CPUS_WORKERS=8
+NUM_CPUS_WORKERS=10
 # Ray port on the master node
 PORT=6378
 # location of the ssh keys to connect with your worker nodes.
@@ -88,7 +90,7 @@ ROOT_DIR=~/dev/apps/ML/Interpretability/myshap
 # This syntax allows to call a function (get_session_creds) declared in another shell file
 . ./get_session_creds.sh
 # echo "Reading iamroles.txt"
-# creds=$(get_session_creds)
+creds=$(get_session_creds)
 
 # step 1: copy data from head to worker node
 . ./copy_data.sh
@@ -103,7 +105,7 @@ do
   echo "$line"
   worker_ip=$line
 
-  # This line opens a SSH connection with each worker and calls update_slave_node with the arguments provided on the worker node
+  # This line opens a SSH connection with each worker and calls update_worker_node with the arguments provided on the worker node
 
   ssh ankur@$worker_ip -i $SSH_KEY_LOCATION "$(typeset -f update_worker_node); \
   update_worker_node $NUM_CPUS_WORKERS $PORT $master_node_address $IMAGE_NAME $CONTAINER_NAME $ROOT_DIR"

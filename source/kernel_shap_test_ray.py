@@ -61,6 +61,7 @@ def run_default_shap_impl(model_state, data_to_explain, num_workers=8):
     explainer = shap.KernelExplainer(model.predict, X_train)
     if isinstance(data_to_explain, pd.DataFrame):
         data_to_explain = data_to_explain.values
+    # splitting the data to explain into chunks which can be processed in parallel
     instance_chunks = np.array_split(data_to_explain, min(num_workers, len(data_to_explain)), axis=0)
     num_splits = len(instance_chunks)
 
@@ -120,7 +121,7 @@ def run_distributed_shap_impl(model_state, data_to_explain):
     weights = np.ones(num_train_samples) / num_train_samples
     kernelShapModel = KernelShapModelDistributedRay(model.predict)
     shap_values = kernelShapModel.run(X_train.values, weights, data_to_explain.values,
-                                      coalition_depth, num_workers=12)
+                                      coalition_depth, num_workers=4)
     return shap_values
 
 
@@ -190,20 +191,23 @@ def test():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='kernel_shap_test_ray', usage='%(prog)s [options]')
-    parser.add_argument('--local', type=bool, default=True, help='if True, Ray creates a new cluster, otherwise '
+    parser.add_argument('--local', type=int, default=1, help='if local = 1, Ray creates a new cluster, otherwise '
                                                                    'Ray attempts to connect to an existing cluster')
 
-    parser.add_argument('--use_local_mode', type=bool, default=False, help='if True, Ray is run in local mode. '
+    parser.add_argument('--use_local_mode', type=int, default=0,  help='if use_local_mode = 1, Ray is run in local mode '
                                                                              'Doing so forces Ray to use a single '
                                                                              'process, making it easier to debug')
-    parser.add_argument('--use_s3', type=bool, default=False,
-                        help='if True, local copy of winequality-red.csv is used. Otherwise, copy stored in '
+    parser.add_argument('--use_s3', type=int, default=0,
+                        help='if use_s3 = 1, local copy of winequality-red.csv is used. Otherwise, copy stored in '
                              'shap-data S3 bucket is used. You must have a iamroles.txt file in your '
                              'root directory specifying the IAM role to be assumed to access the S3 bucket')
 
-    parser.add_argument('--num_rows', type=int, default=10,
+    parser.add_argument('--num_rows', type=int, default=16,
                         help='Number of rows of the input data for which SHAP values are calculated. Larger '
                              'this number, longer the computation time')
+
+    parser.add_argument('--num_cpus', type=int, default=6,
+                        help='Value of the num_cpus parameter passed to Ray.init(). Only effective when local=1')
 
     args = parser.parse_args()
 
@@ -212,7 +216,7 @@ if __name__ == '__main__':
 
     # When running locally, i.e., not connecting to a existing cluster, we get the STS credentials here, because they'll
     # not be provided in the environment variables during docker run.
-    if args.local and args.use_s3:
+    if args.local == 1 and args.use_s3 == 1:
         file_loc = os.path.join(curr_dir, '../iamroles.txt')
         if os.path.isfile(file_loc):
             with open(file_loc, "r") as file:
@@ -220,12 +224,12 @@ if __name__ == '__main__':
                 print('Creating temporary credentials using IAM role {0}'.format(role))
                 set_session_creds(role)
 
-    if args.local:
-        if args.use_local_mode:
-            ray.init(local_mode=True)
+    if args.local == 1:
+        if args.use_local_mode == 1:
+            ray.init(local_mode=True, num_cpus=min(os.cpu_count(), args.num_cpus),
+                     log_to_driver=True, logging_level=logging.DEBUG)
         else:
-            # Will use 6 CPUs
-            ray.init(num_cpus=6)
+            ray.init(num_cpus=min(os.cpu_count(), args.num_cpus), log_to_driver=True, logging_level=logging.DEBUG)
     else:
         try:
             ray.init(address='auto', _redis_password="password", log_to_driver=True, logging_level=logging.DEBUG)
@@ -234,7 +238,7 @@ if __name__ == '__main__':
             # in older version of ray, redis_password doesn't have the leading underscore
             ray.init(address='auto', redis_password="password", log_to_driver=True, logging_level=logging.DEBUG)
 
-    if args.use_s3:
+    if args.use_s3 == 1:
         # if loading data from s3 bucket, second argument is the S3 bucket and csv filename is used as the object key
         df = etl.remote('winequality-red.csv', 'shap-data')
     else:
