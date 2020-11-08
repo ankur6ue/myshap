@@ -54,11 +54,26 @@ def write_to_s3(bucket_name, csv_file, parent_dir):
 def read_from_s3(bucket_name, object_key):
 
     logger = logging.getLogger(__name__)
-    aws_secret = os.environ['AWS_SECRET_ACCESS_KEY_SESS']
-    aws_id = os.environ['AWS_ACCESS_KEY_ID_SESS']
-    token = os.environ['AWS_SESSION_TOKEN']
-    logger.warning('aws_id')
-    logger.warning(aws_id)
+    # Try reading from environment variable first. Otherwise try volume mounts
+    aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY_SESS')
+    if not aws_secret:
+        with open('/etc/awstoken/AWS_SECRET_ACCESS_KEY_SESS') as file:
+            aws_secret = file.read()
+
+    aws_id = os.environ.get('AWS_ACCESS_KEY_ID_SESS')
+    if not aws_id:
+        with open('/etc/awstoken/AWS_ACCESS_KEY_ID_SESS') as file:
+            aws_id = file.read()
+
+    token = os.environ.get('AWS_SESSION_TOKEN')
+    if not token:
+        with open('/etc/awstoken/AWS_SESSION_TOKEN') as file:
+            token = file.read()
+
+    logger.warning('aws_id = ' + aws_id)
+    logger.warning('token =' + token)
+    logger.warning('aws_secret = ' + aws_secret)
+
     s3_resource = boto3.resource(
         's3',
         aws_access_key_id=aws_id,
@@ -77,8 +92,13 @@ def read_from_s3(bucket_name, object_key):
     # for bucket in s3_resource.buckets.all():
     #    print(bucket.name)
     print('reading {0} from S3'.format(object_key))
-    obj = s3_client.get_object(Bucket=bucket_name, Key=object_key)
-    df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+    df = pd.DataFrame()
+    try:
+        obj = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+    except Exception as e:
+        logger.warning(e)
+
     return df
 
 

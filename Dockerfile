@@ -3,6 +3,7 @@
 FROM rayproject/ray as build-env
 RUN conda --version
 RUN apt-get update && apt-get -y install gcc && apt-get -y install g++
+RUN apt-get install inetutils-ping -y
 RUN mkdir /app
 COPY requirements.txt /app
 RUN pip install -r /app/requirements.txt
